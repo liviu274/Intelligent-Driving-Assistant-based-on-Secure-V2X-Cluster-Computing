@@ -61,6 +61,7 @@ def generate_random_mac_address() -> bytes:
 POSITION_COORDINATES = [41.386931, 2.112104]  # Barcelona, Spain
 MAC_ADDRESS = generate_random_mac_address()
 STATION_ID = random.randint(1, 2147483647)
+STATION_TYPE = ST.PASSENGER_CAR
 
 
 def main():
@@ -75,7 +76,7 @@ def main():
     mib = MIB(
         itsGnLocalGnAddr=GNAddress(
             m=M.GN_MULTICAST,
-            st=ST.CYCLIST,
+            st=STATION_TYPE,
             mid=MID(MAC_ADDRESS),
         ),
     )
@@ -153,7 +154,7 @@ def main():
     # ========== Step 6: CA Basic Service ==========
     vehicle_data = VehicleData(
         station_id=STATION_ID,
-        station_type=5,
+        station_type=STATION_TYPE,
         drive_direction="forward",
         vehicle_length={
             "vehicleLengthValue": 1023,
