@@ -49,33 +49,43 @@ from flexstack.facilities.ca_basic_service.cam_transmission_management import (
 )
 
 # Locals
+from modules import CustomStation, DynamicLocationService
 
-from modules import CustomStation
 # Enable logging
 logging.basicConfig(level=logging.INFO)
 
 
 # Cluster Configuration
 BASE_COORDINATES = (41.386931, 2.112104)  # Barcelona, Spain
-SPAWN_AREA = 500 # Consumer area
+SPAWN_AREA = 500  # Spawn area radius in meters
 station = CustomStation.Station(ST.PASSENGER_CAR, BASE_COORDINATES, SPAWN_AREA)
 
-# POSITION_RADIUS_M = 500.0
-# POSITION_COORDINATES = CoordinatesGenerator.random_location_within_radius(
-#     BASE_COORDINATES[0], BASE_COORDINATES[1], POSITION_RADIUS_M
-# )
-# MAC_ADDRESS = CustomMacAddress.Macs.generate_unique_mac()
-# STATION_ID = random.randint(1, 2147483647)
-# STATION_TYPE = ST.PASSENGER_CAR
+# Movement Configuration
+ENABLE_MOVEMENT = True  # Set to True to simulate moving vehicle
+SPEED_KMH = 50.0  # Vehicle speed in km/h
+BEARING_DEGREES = 45.0  # Direction: 0=N, 90=E, 180=S, 270=W
 
 
 def main():
     # ========== Step 2: Location Service ==========
-    location_service = ThreadStaticLocationService(
-        period=1000,
-        latitude=POSITION_COORDINATES[0],
-        longitude=POSITION_COORDINATES[1],
-    )
+    if ENABLE_MOVEMENT:
+        # Dynamic location: vehicle moves at constant speed
+        location_service = DynamicLocationService.DynamicLocationService(
+            initial_lat=station.POSITION_COORDINATES[0],
+            initial_lon=station.POSITION_COORDINATES[1],
+            speed_mps=SPEED_KMH / 3.6,  # Convert km/h to m/s
+            bearing_degrees=BEARING_DEGREES,
+            period_ms=1000,
+        )
+        print(f"🚗 Vehicle moving at {SPEED_KMH} km/h, bearing {BEARING_DEGREES}°")
+    else:
+        # Static location: vehicle stays at spawn position
+        location_service = ThreadStaticLocationService(
+            period=1000,
+            latitude=station.POSITION_COORDINATES[0],
+            longitude=station.POSITION_COORDINATES[1],
+        )
+        print(f"📍 Vehicle static at ({station.POSITION_COORDINATES[0]:.6f}, {station.POSITION_COORDINATES[1]:.6f})")
 
     # ========== Step 3: GeoNetworking ==========
     mib = MIB(
@@ -94,11 +104,11 @@ def main():
 
     # ========== Step 5: Local Dynamic Map ==========
     ldm_location = Location.initializer(
-        latitude=int(POSITION_COORDINATES[0] * 10**7),
-        longitude=int(POSITION_COORDINATES[1] * 10**7),
+        latitude=int(station.POSITION_COORDINATES[0] * 10**7),
+        longitude=int(station.POSITION_COORDINATES[1] * 10**7),
     )
     ldm_area = GeometricArea(
-        circle=Circle(radius=5000),  # Concumer area
+        circle=Circle(radius=5000),  # Consumer area: 5km
         rectangle=None,
         ellipse=None,
     )
@@ -138,7 +148,7 @@ def main():
                 filter_statement_1=FilterStatement(
                     "header.stationId",
                     ComparisonOperators.NOT_EQUAL,
-                    STATION_ID,
+                    station.STATION_ID,
                 )
             ),
             notify_time=TimestampIts(0),
@@ -158,8 +168,8 @@ def main():
 
     # ========== Step 6: CA Basic Service ==========
     vehicle_data = VehicleData(
-        station_id=STATION_ID,
-        station_type=STATION_TYPE,
+        station_id=station.STATION_ID,
+        station_type=station.STATION_TYPE.value,  # Extract integer from enum
         drive_direction="forward",
         vehicle_length={
             "vehicleLengthValue": 1023,
@@ -180,7 +190,7 @@ def main():
     btp_router.freeze_callbacks()
     link_layer = RawLinkLayer(
         "lo",
-        MAC_ADDRESS,
+        station.MAC_ADDRESS,
         receive_callback=gn_router.gn_data_indicate,
     )
     gn_router.link_layer = link_layer
