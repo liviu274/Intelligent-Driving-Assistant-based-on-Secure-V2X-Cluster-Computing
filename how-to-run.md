@@ -4,13 +4,13 @@ The V2X scripts require `sudo` for raw socket access. Use the full path to the v
 
 ### Single Station (CAM Broadcast)
 ```bash
-cd /home/liviu/v2x-messaging/Security-Analysis-and-Attack-Detection-Framework-for-ETSI-GeoNetworking-FlexStack-based-/app
+cd app
 sudo /home/liviu/v2x-messaging/.venv/bin/python cam_boradcast.py
 ```
 
 ### Multiple Stations (Cluster)
 ```bash
-cd /home/liviu/v2x-messaging/Security-Analysis-and-Attack-Detection-Framework-for-ETSI-GeoNetworking-FlexStack-based-/app
+cd app
 sudo /home/liviu/v2x-messaging/.venv/bin/python cluster_launcher.py --stations 5
 ```
 
@@ -18,36 +18,21 @@ sudo /home/liviu/v2x-messaging/.venv/bin/python cluster_launcher.py --stations 5
 
 #### Scenario 1: Static Position Spoofing
 Attacker claims to be 10km away from real position:
+ -- uing a 2 terminal configuration --
+
+terminal 1:
+
 ```bash
-cd /home/liviu/v2x-messaging/Security-Analysis-and-Attack-Detection-Framework-for-ETSI-GeoNetworking-FlexStack-based-/app
-sudo /home/liviu/v2x-messaging/.venv/bin/python attack_orchestrator.py --legitimate 5 --attack-type static
+cd app
+sudo /home/liviu/v2x-messaging/.venv/bin/python cluster_launcher.py --stations 5
 ```
 
-#### Scenario 2: Teleportation Attack
-Attacker alternates between two distant positions every 5 seconds:
+terminal 2:
 ```bash
-sudo /home/liviu/v2x-messaging/.venv/bin/python attack_orchestrator.py --legitimate 5 --attack-type teleport
+cd attacker
+sudo /home/liviu/v2x-messaging/.venv/bin/python attack_orchestrator.py --count 1 --attack-type 1
 ```
 
-#### Scenario 3: Random Position Spoofing
-Attacker broadcasts random positions within 20km every 2 seconds:
-```bash
-sudo /home/liviu/v2x-messaging/.venv/bin/python attack_orchestrator.py --legitimate 5 --attack-type random
-```
-
-#### Scenario 4: Manual Attacker (Single Station)
-Run attacker standalone for custom testing:
-```bash
-sudo /home/liviu/v2x-messaging/.venv/bin/python cam_attacker.py --attack-type teleport
-```
-
-### Original GeoNetworking Example
-```bash
-cd /home/liviu/v2x-messaging/Security-Analysis-and-Attack-Detection-Framework-for-ETSI-GeoNetworking-FlexStack-based-
-sudo /home/liviu/v2x-messaging/.venv/bin/python geonetworking_example.py
-```
-
----
 
 ## Attack Detection Research
 
@@ -56,7 +41,7 @@ The attack scenarios simulate the threat model from your research notebook:
 - **Semantically false** position data (insider attack)
 - **Detection opportunity**: Plausibility checks on:
   - Sudden position jumps (teleportation)
-  - Impossible speeds (>200 km/h for passenger cars)
+  - Impossible speeds (>300 km/h for passenger cars)
   - Trajectory inconsistencies
   - Position vs. neighbor table history
 

