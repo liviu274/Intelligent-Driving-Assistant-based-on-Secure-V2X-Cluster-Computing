@@ -24,10 +24,15 @@ def launch_cluster(num_stations: int, script_path: str = "cam_boradcast.py"):
     print(f"📍 All stations spawn within 500m of Barcelona")
     print(f"📡 Consumer area: 5000m\n")
     
+    # Ensure logs directory exists next to this script
+    base_dir = os.path.dirname(__file__)
+    logs_dir = os.path.join(base_dir, "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+
     for i in range(num_stations):
         try:
-            # Create log file for this station
-            log_filename = f"station_{i+1}.log"
+            # Create log file for this station inside logs/ directory
+            log_filename = os.path.join(logs_dir, f"station_{i+1}.log")
             log_file = open(log_filename, "w")
             log_files.append(log_file)
             

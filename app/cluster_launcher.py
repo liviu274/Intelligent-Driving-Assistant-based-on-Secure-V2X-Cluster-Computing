@@ -12,8 +12,9 @@ import sys
 import time
 import signal
 import os
+from typing import List, Optional
 
-def launch_cluster(num_stations: int, script_path: str = "cam_boradcast.py"):
+def launch_cluster(num_stations: int, location: str, script_path: str = "cam_boradcast.py"):
     """Launch N station instances as separate processes."""
     processes = []
     
@@ -26,7 +27,7 @@ def launch_cluster(num_stations: int, script_path: str = "cam_boradcast.py"):
             # Launch each station as a subprocess
             # stdout/stderr inherit from parent (mixed output to terminal)
             p = subprocess.Popen(
-                [sys.executable, script_path],
+                [sys.executable, script_path, "--location", location],
                 text=True
             )
             processes.append(p)
@@ -90,6 +91,13 @@ def main():
         default="cam_boradcast.py",
         help="Path to the CAM broadcast script (default: cam_boradcast.py)"
     )
+    parser.add_argument(
+        "--location",
+        "-l",
+        type=str,
+        default="dtr",
+        help="Cluster location (dtr - Bucharest Drumul Tabere, bcn - Barcelona))"
+    )
     
     args = parser.parse_args()
     
@@ -105,7 +113,7 @@ def main():
         print("Run with: sudo python3 cluster_launcher.py")
         sys.exit(1)
     
-    launch_cluster(args.stations, script_path)
+    launch_cluster(args.stations, args.location, script_path)
 
 
 if __name__ == "__main__":
