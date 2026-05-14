@@ -56,6 +56,7 @@ from flexstack.facilities.ca_basic_service.cam_transmission_management import (
 
 # Locals
 from modules import CustomStation, CoordinatesGenerator
+from modules.telemetry_client import StationTelemetryPublisher
 
 # Enable logging
 logging.basicConfig(level=logging.INFO)
@@ -139,6 +140,7 @@ class PositionSpoofingAttack:
 def main(attack_type: str):
     # Create attacker station (real physical presence in cluster)
     station = CustomStation.Station(ST.PASSENGER_CAR, BASE_COORDINATES, SPAWN_AREA)
+    telemetry_publisher = StationTelemetryPublisher.from_env()
     
     # Initialize attack
     attack = PositionSpoofingAttack(attack_type, station.POSITION_COORDINATES)
@@ -153,6 +155,24 @@ def main(attack_type: str):
         latitude=spoofed_pos[0],
         longitude=spoofed_pos[1],
     )
+    # Attach telemetry publisher if configured
+    if telemetry_publisher is not None:
+        location_service.add_callback(
+            telemetry_publisher.build_callback(
+                station_id=station.STATION_ID,
+                station_type=station.STATION_TYPE.value,
+            )
+        )
+        # Publish initial spoofed snapshot
+        telemetry_publisher.publish_snapshot(
+            station_id=station.STATION_ID,
+            lat=spoofed_pos[0],
+            lon=spoofed_pos[1],
+            speed_mps=0.0,
+            heading_deg=0.0,
+            station_type=station.STATION_TYPE.value,
+            role="attacker",
+        )
     
     # For teleportation attack, update position periodically
     if attack_type == "teleport":
@@ -164,6 +184,16 @@ def main(attack_type: str):
                 new_pos = attack.get_spoofed_position()
                 location_service.latitude = new_pos[0]
                 location_service.longitude = new_pos[1]
+                if telemetry_publisher is not None:
+                    telemetry_publisher.publish_snapshot(
+                        station_id=station.STATION_ID,
+                        lat=new_pos[0],
+                        lon=new_pos[1],
+                        speed_mps=0.0,
+                        heading_deg=0.0,
+                        station_type=station.STATION_TYPE.value,
+                        role="attacker",
+                    )
                 print(f"⚡ TELEPORTED to ({new_pos[0]:.6f}, {new_pos[1]:.6f})")
         
         teleport_thread = threading.Thread(target=teleport_loop, daemon=True)
@@ -178,6 +208,16 @@ def main(attack_type: str):
                 new_pos = attack.get_spoofed_position()
                 location_service.latitude = new_pos[0]
                 location_service.longitude = new_pos[1]
+                if telemetry_publisher is not None:
+                    telemetry_publisher.publish_snapshot(
+                        station_id=station.STATION_ID,
+                        lat=new_pos[0],
+                        lon=new_pos[1],
+                        speed_mps=0.0,
+                        heading_deg=0.0,
+                        station_type=station.STATION_TYPE.value,
+                        role="attacker",
+                    )
                 print(f"🎲 Random position: ({new_pos[0]:.6f}, {new_pos[1]:.6f})")
         
         random_thread = threading.Thread(target=random_loop, daemon=True)

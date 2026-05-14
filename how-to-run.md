@@ -23,16 +23,24 @@ Attacker claims to be 10km away from real position:
 terminal 1:
 
 ```bash
-cd app
-sudo /home/liviu/v2x-messaging/.venv/bin/python cluster_launcher.py --stations 5
+python app/web_gui/server.py --port 8000
 ```
 
 terminal 2:
+
 ```bash
-cd attacker
-sudo /home/liviu/v2x-messaging/.venv/bin/python attack_orchestrator.py --count 1 --attack-type 1
+cd app
+sudo /home/liviu/v2x-messaging/.venv/bin/python cluster_launcher.py --stations 5 --location dtr --telemetry-url http://127.0.0.1:8000/api/telemetry
 ```
 
+terminal 3:
+```bash
+cd attacker
+sudo /home/liviu/v2x-messaging/.venv/bin/python attack_orchestrator.py --count 1 --attack-type 1 --telemetry-url http://127.0.0.1:8000/api/telemetry
+```
+
+
+Then open `http://127.0.0.1:8000` to see every live station on the map.
 
 ## Attack Detection Research
 

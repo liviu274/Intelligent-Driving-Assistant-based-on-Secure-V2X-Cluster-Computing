@@ -10,6 +10,7 @@ class CAMSpoofer:
         self.attack_type = attack_type
         self.mac = mac
         self.payload = bytearray(payload)  # Make mutable for modification
+        self.id = None
         self.lat, self.lon, self.heading, self.speed = None, None, None, None
         
     """  Payload is bytes 14-98 inside the frame
@@ -34,6 +35,11 @@ class CAMSpoofer:
               We utilize the definied structure (Figure 9.5.2.1)
               In our custom network frame it is found in bytes 26-49 
               From this section we will substract the Lat, Long values   """
+        
+        # Extract station_id from bytes 60-63 (4 bytes, offset by -14)
+        id_payload = self.payload[60 - 14: 64 - 14]
+        self.id = int.from_bytes(id_payload, byteorder='big', signed=False)
+        print(f"      Station ID: {self.id}")
         
         lpv_payload = self.payload[26-14:49-14]
         # From 9.5.2.2 Fields: Latitude and Longitude are 4 bytes each (unsigned int32)
