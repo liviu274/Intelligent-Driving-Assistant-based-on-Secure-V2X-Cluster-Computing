@@ -62,6 +62,7 @@ import logging
 # Data collection + labeling pipelines
 
 from modules.DataCollector import DataCollector
+from modules.telemetry_client import StationTelemetryPublisher
 
 
 # Cluster Configuration
@@ -104,7 +105,12 @@ class CAMDataLogger:
 
 
 
-def main(location: str):
+def main(
+    location: str,
+    random_motion: bool = False,
+    min_speed_kmh: float = 20.0,
+    max_speed_kmh: float = 50.0,
+):
     if COORDINATES[location] is not None:
         coords = COORDINATES[location]
     else:
@@ -112,8 +118,19 @@ def main(location: str):
         coords = COORDINATES["dtr"]
         
     station = CustomStation.Station(ST.PASSENGER_CAR, coords, SPAWN_AREA)
+
+    speed_kmh = SPEED_KMH
+    bearing_degrees = BEARING_DEGREES
+    if random_motion and ENABLE_MOVEMENT:
+        speed_kmh = random.uniform(min_speed_kmh, max_speed_kmh)
+        bearing_degrees = random.uniform(0.0, 360.0)
+        print(
+            f"🎲 Random motion for station {station.STATION_ID}: "
+            f"speed={speed_kmh:.2f} km/h, heading={bearing_degrees:.1f}°"
+        )
     
     collector = DataCollector()
+    telemetry_publisher = StationTelemetryPublisher.from_env()
     
     # ========== Step 2: Location Service ==========
     if ENABLE_MOVEMENT:
@@ -121,11 +138,11 @@ def main(location: str):
         location_service = DynamicLocationService.DynamicLocationService(
             initial_lat=station.POSITION_COORDINATES[0],
             initial_lon=station.POSITION_COORDINATES[1],
-            speed_mps=SPEED_KMH / 3.6,  # Convert km/h to m/s
-            bearing_degrees=BEARING_DEGREES,
+            speed_mps=speed_kmh / 3.6,  # Convert km/h to m/s
+            bearing_degrees=bearing_degrees,
             period_ms=1000,
         )
-        print(f"🚗 Vehicle moving at {SPEED_KMH} km/h, bearing {BEARING_DEGREES}°")
+        print(f"🚗 Vehicle moving at {speed_kmh:.2f} km/h, bearing {bearing_degrees:.1f}°")
         # Ensure the dynamic service thread/loop is started if the class exposes start()
         start_fn = getattr(location_service, "start", None)
         if callable(start_fn):
@@ -143,6 +160,23 @@ def main(location: str):
             longitude=station.POSITION_COORDINATES[1],
         )
         print(f"📍 Vehicle static at ({station.POSITION_COORDINATES[0]:.6f}, {station.POSITION_COORDINATES[1]:.6f})")
+
+    if telemetry_publisher is not None:
+        location_service.add_callback(
+            telemetry_publisher.build_callback(
+                station_id=station.STATION_ID,
+                station_type=station.STATION_TYPE.value,
+            )
+        )
+        telemetry_publisher.publish_snapshot(
+            station_id=station.STATION_ID,
+            lat=station.POSITION_COORDINATES[0],
+            lon=station.POSITION_COORDINATES[1],
+            speed_mps=speed_kmh / 3.6 if ENABLE_MOVEMENT else 0.0,
+            heading_deg=bearing_degrees if ENABLE_MOVEMENT else 0.0,
+            station_type=station.STATION_TYPE.value,
+            role="live",
+        )
 
     # ========== Step 3: GeoNetworking ==========
     mib = MIB(
@@ -463,5 +497,32 @@ if __name__ == "__main__":
         default="dtr",
         help="Cluster location (dtr - Bucharest Drumul Tabere, bcn - Barcelona))"
     )
+    parser.add_argument(
+        "--random-motion",
+        action="store_true",
+        help="Randomize speed and heading for this station on startup"
+    )
+    parser.add_argument(
+        "--min-speed-kmh",
+        type=float,
+        default=20.0,
+        help="Minimum random speed in km/h (used with --random-motion)"
+    )
+    parser.add_argument(
+        "--max-speed-kmh",
+        type=float,
+        default=90.0,
+        help="Maximum random speed in km/h (used with --random-motion)"
+    )
     args = parser.parse_args()
-    main(args.location)
+    if args.min_speed_kmh < 0 or args.max_speed_kmh < 0:
+        parser.error("--min-speed-kmh and --max-speed-kmh must be non-negative")
+    if args.min_speed_kmh > args.max_speed_kmh:
+        parser.error("--min-speed-kmh must be <= --max-speed-kmh")
+
+    main(
+        args.location,
+        random_motion=args.random_motion,
+        min_speed_kmh=args.min_speed_kmh,
+        max_speed_kmh=args.max_speed_kmh,
+    )

@@ -14,20 +14,50 @@ import signal
 import os
 from typing import List, Optional
 
-def launch_cluster(num_stations: int, location: str, script_path: str = "cam_boradcast.py"):
+def launch_cluster(
+    num_stations: int,
+    location: str,
+    script_path: str = "cam_boradcast.py",
+    telemetry_url: Optional[str] = None,
+    random_motion: bool = False,
+    min_speed_kmh: float = 20.0,
+    max_speed_kmh: float = 50.0,
+):
     """Launch N station instances as separate processes."""
     processes = []
+    child_env = os.environ.copy()
+    if telemetry_url:
+        child_env["STATION_TELEMETRY_URL"] = telemetry_url
     
     print(f"🚀 Launching cluster with {num_stations} stations...")
     print(f"📍 All stations spawn within 500m of Barcelona")
     print(f"📡 Consumer area: 5000m\n")
+    if telemetry_url:
+        print(f"🌍 Telemetry feed: {telemetry_url}\n")
+    if random_motion:
+        print(
+            f"🎲 Random motion enabled: speed range {min_speed_kmh:.1f}-{max_speed_kmh:.1f} km/h, "
+            "heading range 0-360°\n"
+        )
     
     for i in range(num_stations):
         try:
             # Launch each station as a subprocess
             # stdout/stderr inherit from parent (mixed output to terminal)
+            station_cmd = [sys.executable, script_path, "--location", location]
+            if random_motion:
+                station_cmd.extend(
+                    [
+                        "--random-motion",
+                        "--min-speed-kmh",
+                        str(min_speed_kmh),
+                        "--max-speed-kmh",
+                        str(max_speed_kmh),
+                    ]
+                )
             p = subprocess.Popen(
-                [sys.executable, script_path, "--location", location],
+                station_cmd,
+                env=child_env,
                 text=True
             )
             processes.append(p)
@@ -98,6 +128,29 @@ def main():
         default="dtr",
         help="Cluster location (dtr - Bucharest Drumul Tabere, bcn - Barcelona))"
     )
+    parser.add_argument(
+        "--telemetry-url",
+        type=str,
+        default="",
+        help="Optional telemetry endpoint, e.g. http://127.0.0.1:8000/api/telemetry"
+    )
+    parser.add_argument(
+        "--random-motion",
+        action="store_true",
+        help="Randomize each station's speed and heading on startup"
+    )
+    parser.add_argument(
+        "--min-speed-kmh",
+        type=float,
+        default=20.0,
+        help="Minimum random speed in km/h (used with --random-motion)"
+    )
+    parser.add_argument(
+        "--max-speed-kmh",
+        type=float,
+        default=50.0,
+        help="Maximum random speed in km/h (used with --random-motion)"
+    )
     
     args = parser.parse_args()
     
@@ -112,8 +165,22 @@ def main():
         print("⚠️  This script requires root privileges (raw sockets)")
         print("Run with: sudo python3 cluster_launcher.py")
         sys.exit(1)
+
+    if args.min_speed_kmh < 0 or args.max_speed_kmh < 0:
+        parser.error("--min-speed-kmh and --max-speed-kmh must be non-negative")
+    if args.min_speed_kmh > args.max_speed_kmh:
+        parser.error("--min-speed-kmh must be <= --max-speed-kmh")
     
-    launch_cluster(args.stations, args.location, script_path)
+    telemetry_url = args.telemetry_url.strip() or None
+    launch_cluster(
+        args.stations,
+        args.location,
+        script_path,
+        telemetry_url=telemetry_url,
+        random_motion=args.random_motion,
+        min_speed_kmh=args.min_speed_kmh,
+        max_speed_kmh=args.max_speed_kmh,
+    )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GeoNetworking Live Map</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08111f;
+      --panel: rgba(8, 14, 28, 0.86);
+      --panel-strong: rgba(12, 19, 37, 0.95);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #eff4ff;
+      --muted: #9fb0cd;
+      --accent: #6ee7ff;
+      --accent-2: #f7c948;
+      --bad: #ff7b8a;
+      --good: #6df7b5;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body {
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top left, rgba(110, 231, 255, 0.18), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(247, 201, 72, 0.12), transparent 32%),
+        linear-gradient(135deg, #050914 0%, #08111f 42%, #0c1528 100%);
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      height: 100vh;
+    }
+
+    .sidebar {
+      position: relative;
+      padding: 24px;
+      border-right: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(6, 11, 22, 0.98), rgba(10, 17, 31, 0.82));
+      backdrop-filter: blur(18px);
+      overflow: auto;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(110, 231, 255, 0.22);
+      background: rgba(110, 231, 255, 0.08);
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 18px 0 10px;
+      font-size: 34px;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+
+    .subtitle {
+      margin: 0 0 22px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .stat {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
+      box-shadow: var(--shadow);
+    }
+
+    .stat-label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.05em;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 22px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      gap: 12px;
+    }
+
+    .panel-header h2 {
+      margin: 0;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+
+    .badge {
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid rgba(109, 247, 181, 0.2);
+      color: var(--good);
+      background: rgba(109, 247, 181, 0.08);
+    }
+
+    .station-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .station-row {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .station-row .topline {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+
+    .station-row .station-id {
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .station-row .age {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .station-row .details {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .map-wrap {
+      position: relative;
+      min-width: 0;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #09101e;
+    }
+
+    .map-overlay {
+      position: absolute;
+      left: 20px;
+      bottom: 20px;
+      z-index: 500;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(9, 14, 25, 0.82);
+      color: var(--muted);
+      font-size: 13px;
+      backdrop-filter: blur(14px);
+    }
+
+    .map-overlay strong { color: var(--text); }
+
+    .hint {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 960px) {
+      body { overflow: auto; }
+      .shell { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
+      .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+      .map-wrap { height: 72vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="eyebrow">Live GeoNetworking feed</div>
+      <h1>Station positions on the map</h1>
+      <p class="subtitle">
+        Each station publishes its own live location to the local telemetry API. The browser polls that feed and keeps the map in sync without sniffing raw packets.
+      </p>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">Stations</span>
+          <div class="stat-value" id="station-count">0</div>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Online</span>
+          <div class="stat-value" id="online-count">0</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Telemetry status</h2>
+          <div class="badge" id="sync-badge">Waiting</div>
+        </div>
+        <div class="details" id="sync-details">No updates yet.</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Stations</h2>
+          <div class="badge" id="last-refresh">--:--:--</div>
+        </div>
+        <div class="station-list" id="station-list"></div>
+      </div>
+
+      <div class="hint">
+        Start the map server first, then point the station launcher at its telemetry endpoint. The GUI will update automatically as station processes publish new coordinates.
+      </div>
+    </aside>
+
+    <main class="map-wrap">
+      <div id="map"></div>
+      <div class="map-overlay"><strong>Live feed</strong> updates every second</div>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map("map", { zoomControl: false }).setView([41.386931, 2.112104], 13);
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+
+    const markers = new Map();
+    const stationList = document.getElementById("station-list");
+    const stationCount = document.getElementById("station-count");
+    const onlineCount = document.getElementById("online-count");
+    const syncBadge = document.getElementById("sync-badge");
+    const syncDetails = document.getElementById("sync-details");
+    const lastRefresh = document.getElementById("last-refresh");
+    let fittedToStations = false;
+
+    function formatAge(ageMs) {
+      if (ageMs < 1000) {
+        return `${ageMs} ms ago`;
+      }
+      return `${(ageMs / 1000).toFixed(ageMs < 10000 ? 1 : 0)} s ago`;
+    }
+
+    function formatCoord(value) {
+      return typeof value === "number" ? value.toFixed(6) : "--";
+    }
+
+    function markerColor(ageMs) {
+      if (ageMs <= 2000) {
+        return "#6ee7ff";
+      }
+      if (ageMs <= 5000) {
+        return "#f7c948";
+      }
+      return "#ff7b8a";
+    }
+
+    function stationPopup(station) {
+      const speed = station.speed_mps == null ? "--" : Number(station.speed_mps).toFixed(2);
+      const heading = station.heading_deg == null ? "--" : Number(station.heading_deg).toFixed(1);
+      return `
+        <div style="min-width:220px">
+          <div style="font-weight:700;font-size:15px;margin-bottom:6px">Station ${station.station_id}</div>
+          <div>Lat: ${formatCoord(station.lat)}</div>
+          <div>Lon: ${formatCoord(station.lon)}</div>
+          <div>Speed: ${speed} m/s</div>
+          <div>Heading: ${heading}°</div>
+          <div>Age: ${formatAge(station.age_ms || 0)}</div>
+        </div>
+      `;
+    }
+
+    function renderStations(stations) {
+      const seen = new Set();
+      const bounds = [];
+      let online = 0;
+
+      stationList.innerHTML = stations.length
+        ? ""
+        : `<div class="station-row"><div class="details">No stations have published telemetry yet.</div></div>`;
+
+      for (const station of stations) {
+        const stationId = String(station.station_id);
+        const hasCoords = Number.isFinite(station.lat) && Number.isFinite(station.lon);
+        if (!hasCoords) {
+          continue;
+        }
+
+        const ageMs = Number(station.age_ms || 0);
+        const color = markerColor(ageMs);
+        seen.add(stationId);
+        bounds.push([station.lat, station.lon]);
+        if (ageMs <= 5000) {
+          online += 1;
+        }
+
+        let marker = markers.get(stationId);
+        if (!marker) {
+          marker = L.circleMarker([station.lat, station.lon], {
+            radius: 9,
+            weight: 3,
+            color,
+            fillColor: color,
+            fillOpacity: 0.92,
+          }).addTo(map);
+          markers.set(stationId, marker);
+        }
+
+        marker.setLatLng([station.lat, station.lon]);
+        marker.setStyle({ color, fillColor: color });
+        marker.bindPopup(stationPopup(station));
+
+        const row = document.createElement("div");
+        row.className = "station-row";
+        row.innerHTML = `
+          <div class="topline">
+            <div class="station-id">Station ${stationId}</div>
+            <div class="age" style="color:${color}">${formatAge(ageMs)}</div>
+          </div>
+          <div class="details">
+            ${formatCoord(station.lat)}, ${formatCoord(station.lon)}<br>
+            ${station.speed_mps == null ? "Speed: --" : `Speed: ${Number(station.speed_mps).toFixed(2)} m/s`} ·
+            ${station.heading_deg == null ? "Heading: --" : `Heading: ${Number(station.heading_deg).toFixed(1)}°`}
+          </div>
+        `;
+        row.addEventListener("click", () => {
+          map.setView([station.lat, station.lon], Math.max(map.getZoom(), 15), { animate: true });
+          marker.openPopup();
+        });
+        stationList.appendChild(row);
+      }
+
+      for (const [stationId, marker] of markers.entries()) {
+        if (!seen.has(stationId)) {
+          map.removeLayer(marker);
+          markers.delete(stationId);
+        }
+      }
+
+      stationCount.textContent = String(stations.length);
+      onlineCount.textContent = String(online);
+
+      if (bounds.length && !fittedToStations) {
+        map.fitBounds(bounds, { padding: [50, 50] });
+        fittedToStations = true;
+      }
+    }
+
+    async function refreshStations() {
+      try {
+        const response = await fetch("/api/stations", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const stations = Array.isArray(payload.stations) ? payload.stations : [];
+        renderStations(stations);
+        const stamp = new Date();
+        lastRefresh.textContent = stamp.toLocaleTimeString();
+        syncBadge.textContent = "Live";
+        syncBadge.style.borderColor = "rgba(109, 247, 181, 0.2)";
+        syncBadge.style.color = "var(--good)";
+        syncDetails.textContent = `${stations.length} station${stations.length === 1 ? "" : "s"} in memory, refreshed from the local telemetry API.`;
+      } catch (error) {
+        syncBadge.textContent = "Offline";
+        syncBadge.style.borderColor = "rgba(255, 123, 138, 0.22)";
+        syncBadge.style.color = "var(--bad)";
+        syncDetails.textContent = `Unable to load telemetry: ${error.message}`;
+      }
+    }
+
+    refreshStations();
+    setInterval(refreshStations, 1000);
+  </script>
+</body>
+</html>
