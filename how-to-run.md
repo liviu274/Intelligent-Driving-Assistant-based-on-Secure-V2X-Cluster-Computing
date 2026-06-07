@@ -14,11 +14,7 @@ cd app
 sudo /home/liviu/v2x-messaging/.venv/bin/python cluster_launcher.py --stations 5
 ```
 
-### Position Spoofing Attack Scenarios
-
-#### Scenario 1: Static Position Spoofing
-Attacker claims to be 10km away from real position:
- -- uing a 2 terminal configuration --
+### Attack orchestrations on targeted cluster
 
 terminal 1:
 

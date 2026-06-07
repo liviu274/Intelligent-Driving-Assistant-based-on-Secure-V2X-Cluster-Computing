@@ -17,3 +17,14 @@ sudo /home/liviu/v2x-messaging/.venv/bin/python cluster_launcher.py --stations 5
 ```
 
 Then open `http://127.0.0.1:8000` to see every live station on the map.
+
+## Attack Collection Script
+
+A helper wrapper is available at `results/run_collect_cluster_attacks.sh`.
+Run it from the repository root to clean `app/data/cam_trace.csv`, start the cluster, schedule attacks, and capture data for 120 seconds:
+
+```bash
+./results/run_collect_cluster_attacks.sh
+```
+
+Additional options may be passed through to `collect_cluster_attacks.py` as needed.

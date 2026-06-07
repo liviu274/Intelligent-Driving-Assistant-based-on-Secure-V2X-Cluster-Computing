@@ -14,6 +14,7 @@ import logging
 import random
 import time
 import argparse
+from pathlib import Path
 
 # FlexStack imports
 from flexstack.linklayer.raw_link_layer import RawLinkLayer
@@ -261,7 +262,16 @@ def main(
                 
                 logger.info(f"📍 CAM from {station_id}: lat={lat:.6f}, lon={lon:.6f}, heading={heading_val:.1f}°, speed={speed}")
                 print(f"📍 CAM from {station_id}: lat={lat:.6f}, lon={lon:.6f}, heading={heading_val:.1f}°, speed={speed}")
-                collector.log_cam(station_id, lat, lon, speed, heading_val, label=0)
+                # pass MAC and set station_rd to the station identifier for formal recording
+                collector.log_cam(
+                    station_id,
+                    lat,
+                    lon,
+                    speed,
+                    heading_val,
+                    station_rd=str(station_id),
+                    label=0,
+                )
             except (KeyError, TypeError) as e:
                 logger.error(f"Error accessing CAM dict structure: {e}", exc_info=True)
                 
